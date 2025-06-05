@@ -14,7 +14,7 @@ from tqdm import tqdm
 import argparse
 from logger import get_logger
 
-LOGGER = get_logger("cifar100_adv_training")
+LOGGER = get_logger("cifar10_adv_training")
 MEAN = torch.tensor([0.4914, 0.4822, 0.4465]).view(1, 3, 1, 1).cuda()
 STD = torch.tensor([0.2023, 0.1994, 0.2010]).view(1, 3, 1, 1).cuda()
 
@@ -27,7 +27,7 @@ def unpickle(file):
     return dict
 
 
-class CIFAR100Dataset(Dataset):
+class CIFAR10Dataset(Dataset):
     def __init__(self, data, labels, transform=None):
         self.data = data
         self.labels = labels
@@ -364,13 +364,13 @@ def validate(val_loader, model, criterion):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="CIFAR-100 Adversarial Training for Free"
+        description="CIFAR-10 Adversarial Training for Free"
     )
     parser.add_argument(
         "--data-path",
-        default="/path/to/cifar100",
+        default="/path/to/cifar10",
         type=str,
-        help="path to CIFAR-100 data",
+        help="path to CIFAR-10 data",
     )
     parser.add_argument(
         "--epochs", default=200, type=int, help="number of total epochs to run"
@@ -397,19 +397,14 @@ def main():
     parser.add_argument("--print-freq", default=50, type=int, help="print frequency")
     parser.add_argument("--save-freq", default=5, type=int, help="save frequency")
     parser.add_argument(
-        "--coarse",
-        action="store_true",
-        help="use 20 superclasses instead of 100 classes",
-    )
-    parser.add_argument(
         "--model",
-        default="resnet18",
+        default="wrn_32_10",
         choices=["resnet18", "resnet34", "resnet50", "wrn_32_10"],
         help="model architecture",
     )
     parser.add_argument(
         "--save-dir",
-        default="./checkpoints",
+        default="./experiments_cifar10",
         type=str,
         help="directory to save checkpoints",
     )
@@ -427,33 +422,32 @@ def main():
     args.clip_eps = args.clip_eps / 255.0
     args.fgsm_step = args.fgsm_step / 255.0
 
-    # Set up data paths
+    # Set up data paths for CIFAR-10
     data_pre_path = args.data_path
-    metadata_path = os.path.join(data_pre_path, "meta")
-    data_train_path = os.path.join(data_pre_path, "train")
-    data_test_path = os.path.join(data_pre_path, "test")
 
-    # Load data
-    metadata = unpickle(metadata_path)
-    data_train_dict = unpickle(data_train_path)
-    data_test_dict = unpickle(data_test_path)
+    # Load CIFAR-10 training data
+    data_train = []
+    label_train = []
+    for i in range(1, 6):  # data_batch_1 to data_batch_5
+        batch_path = os.path.join(data_pre_path, f"data_batch_{i}")
+        batch_dict = unpickle(batch_path)
+        data_train.append(batch_dict[b"data"])
+        label_train.extend(batch_dict[b"labels"])
 
-    # Get data
-    data_train = data_train_dict[b"data"].reshape((-1, 3, 32, 32)).transpose(0, 2, 3, 1)
-    data_test = data_test_dict[b"data"].reshape((-1, 3, 32, 32)).transpose(0, 2, 3, 1)
+    # Concatenate all training batches
+    data_train = np.concatenate(data_train, axis=0)
+    data_train = data_train.reshape((-1, 3, 32, 32)).transpose(0, 2, 3, 1)
+    label_train = np.array(label_train)
 
-    # Get labels based on coarse flag
-    print("Using coarse labels" if args.coarse else "Using fine labels")
-    if args.coarse:
-        LOGGER.info("Using 20 superclasses")
-        label_train = np.array(data_train_dict[b"coarse_labels"])
-        label_test = np.array(data_test_dict[b"coarse_labels"])
-        num_classes = 20
-    else:
-        LOGGER.info("Using 100 classes")
-        label_train = np.array(data_train_dict[b"fine_labels"])
-        label_test = np.array(data_test_dict[b"fine_labels"])
-        num_classes = 100
+    # Load CIFAR-10 test data
+    test_path = os.path.join(data_pre_path, "test_batch")
+    test_dict = unpickle(test_path)
+    data_test = test_dict[b"data"].reshape((-1, 3, 32, 32)).transpose(0, 2, 3, 1)
+    label_test = np.array(test_dict[b"labels"])
+
+    # CIFAR-10 has 10 classes
+    num_classes = 10
+    LOGGER.info("Using CIFAR-10 with 10 classes")
 
     # Set up transformations
     train_transform = transforms.Compose(
@@ -474,8 +468,8 @@ def main():
     )
 
     # Create datasets
-    train_dataset = CIFAR100Dataset(data_train, label_train, transform=train_transform)
-    test_dataset = CIFAR100Dataset(data_test, label_test, transform=test_transform)
+    train_dataset = CIFAR10Dataset(data_train, label_train, transform=train_transform)
+    test_dataset = CIFAR10Dataset(data_test, label_test, transform=test_transform)
 
     # Create data loaders
     train_loader = DataLoader(
@@ -508,7 +502,7 @@ def main():
 
         model = Model()
 
-    # Adjust the final layer for CIFAR-100
+    # Adjust the final layer for CIFAR-10
     model.fc = nn.Linear(model.fc.in_features, num_classes)
 
     # Move model to GPU

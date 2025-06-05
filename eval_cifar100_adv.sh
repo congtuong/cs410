@@ -11,12 +11,13 @@ LR=0.1
 MOMENTUM=0.9
 WEIGHT_DECAY=0.0001
 N_REPEATS=4
-FGSM_STEP=0.003
-CLIP_EPS=0.01
+FGSM_STEP=2
+CLIP_EPS=8
 PRINT_FREQ=50
 SAVE_FREQ=5
-MODEL="resnet18"
+MODEL="wrn_32_10"
 USE_COARSE=""
+CHECKPOINT=""
 
 # Parse command-line options
 while [[ $# -gt 0 ]]; do
@@ -67,6 +68,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --model)
             MODEL="$2"
+            shift 2
+            ;;
+        --checkpoint)
+            CHECKPOINT="$2"
             shift 2
             ;;
         --coarse)
@@ -123,6 +128,7 @@ echo "FGSM step size: $FGSM_STEP"
 echo "Perturbation limit (eps): $CLIP_EPS"
 echo "Using coarse labels: ${USE_COARSE:+Yes}"
 echo "Output directory: $OUTPUT_DIR"
+echo "Checkpoint: ${CHECKPOINT:-None}"
 echo "=================================================="
 
 # Run the training
@@ -140,7 +146,7 @@ python cifar100_adv_training.py \
     --save-freq "$SAVE_FREQ" \
     --model "$MODEL" \
     --evaluate \
-    --checkpoint "/mlcv2/WorkingSpace/Personal/tuongbck/cs410/experiments/wrn_32_10_eps6_step2_rep4/model_best.pth.tar" \
+    --checkpoint "$CHECKPOINT" \
     $USE_COARSE 2>&1 | tee "$OUTPUT_DIR/eval.log"
 
 echo "Training completed! Results saved to $OUTPUT_DIR"
